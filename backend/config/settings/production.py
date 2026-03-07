@@ -70,6 +70,9 @@ WHITENOISE_ROOT = FRONTEND_DIR
 if os.environ.get('DB_SSL', 'true').lower() == 'true':
     DATABASES['default']['OPTIONS']['ssl'] = {'ca': '/etc/ssl/certs/ca-certificates.crt'}
 
+# DB connection timeout — fail fast instead of hanging 30s
+DATABASES['default']['OPTIONS']['connect_timeout'] = 10
+
 # Logging
 LOGGING = {
     'version': 1,
