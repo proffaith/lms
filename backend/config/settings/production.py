@@ -3,6 +3,13 @@ from pathlib import Path
 
 from .base import *  # noqa: F401, F403
 
+# Use PyMySQL if mysqlclient (C extension) isn't available (e.g. on Heroku)
+try:
+    import MySQLdb  # noqa: F401
+except ImportError:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+
 DEBUG = False
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
@@ -39,6 +46,10 @@ STATICFILES_DIRS = [
 
 # Serve index.html at the root via whitenoise
 WHITENOISE_ROOT = FRONTEND_DIR
+
+# Azure MySQL requires SSL from external connections (Heroku → Azure)
+if os.environ.get('DB_SSL', 'true').lower() == 'true':
+    DATABASES['default']['OPTIONS']['ssl'] = {'ca': '/etc/ssl/certs/ca-certificates.crt'}
 
 # Logging
 LOGGING = {
