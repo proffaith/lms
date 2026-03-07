@@ -11,17 +11,18 @@ except ImportError:
     import pymysql
     pymysql.install_as_MySQLdb()
 
-# QuotaGuard SOCKS proxy — route all outbound connections through static IPs
+# QuotaGuard proxy — route all outbound connections through static IPs
 # so Azure MySQL firewall can whitelist them
 QUOTAGUARD_URL = os.environ.get('QUOTAGUARDSTATIC_URL')
 if QUOTAGUARD_URL:
     import socks
     import socket
     parsed = urlparse(QUOTAGUARD_URL)
+    # Use SOCKS5 endpoint on port 1080 (HTTP CONNECT on 9293 has auth issues)
     socks.set_default_proxy(
         socks.SOCKS5,
         parsed.hostname,
-        parsed.port,
+        1080,
         True,  # rdns: let proxy resolve DNS
         parsed.username,
         parsed.password,
