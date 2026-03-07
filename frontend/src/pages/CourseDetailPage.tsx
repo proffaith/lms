@@ -143,6 +143,15 @@ export default function CourseDetailPage() {
                 Unenroll
               </button>
             )}
+            {(course.is_enrolled || canEdit) && (
+              <Link
+                to={`/courses/${slug}/feed`}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                Course Feed
+              </Link>
+            )}
           </div>
         </div>
 

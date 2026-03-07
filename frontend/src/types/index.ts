@@ -237,6 +237,74 @@ export interface PlatformStats {
   pending_submissions: number
 }
 
+// Feed
+export type FeedItemType = 'research' | 'instructor' | 'student' | 'milestone'
+export type FeedReactionType = 'interesting' | 'disagree' | 'connects' | 'question'
+export type FeedReactionTarget = 'item' | 'response'
+
+export interface FeedItem {
+  id: number
+  course: number
+  author: UserMinimal | null
+  item_type: FeedItemType
+  title: string
+  summary: string
+  body_html: string
+  source_url: string
+  source_metadata: Record<string, unknown>
+  course_objective: number | null
+  course_objective_code: string | null
+  related_item: number | null
+  related_item_title: string | null
+  is_pinned: boolean
+  is_featured: boolean
+  response_count: number
+  reaction_counts: Partial<Record<FeedReactionType, number>>
+  is_bookmarked: boolean
+  my_reactions: FeedReactionType[]
+  engagement_score: number
+  created_at: string
+  updated_at: string
+}
+
+export interface FeedResponse {
+  id: number
+  feed_item: number
+  author: UserMinimal
+  parent: number | null
+  body_text: string
+  highlighted_text: string
+  replies: FeedResponse[]
+  reaction_counts: Partial<Record<FeedReactionType, number>>
+  my_reactions: FeedReactionType[]
+  created_at: string
+  updated_at: string
+}
+
+export interface FeedBookmark {
+  id: number
+  feed_item: number
+  feed_item_title: string
+  note: string
+  created_at: string
+}
+
+export interface EngagementProfile {
+  id: number
+  user: UserMinimal
+  course: number
+  total_responses: number
+  total_reactions: number
+  total_contributions: number
+  active_days_count: number
+  current_streak: number
+  depth_score: number
+  peer_interaction_score: number
+  last_activity_at: string | null
+  computed_grade: number
+  updated_at: string
+}
+
 // API
 export interface PaginatedResponse<T> {
   count: number

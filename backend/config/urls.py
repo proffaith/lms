@@ -13,6 +13,7 @@ urlpatterns = [
         path('', include('apps.curriculum.urls')),
         path('', include('apps.assessments.urls')),
         path('', include('apps.progress.urls')),
+        path('', include('apps.feed.urls')),
     ])),
     # API docs
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

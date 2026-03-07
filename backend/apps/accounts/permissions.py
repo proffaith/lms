@@ -48,4 +48,6 @@ def _get_course(obj):
         return obj.module.course
     if hasattr(obj, 'lesson'):  # LessonContent, Quiz, Assignment
         return obj.lesson.module.course
+    if hasattr(obj, 'feed_item'):  # FeedResponse, FeedBookmark
+        return obj.feed_item.course
     return obj

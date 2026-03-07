@@ -318,14 +318,14 @@ class Command(BaseCommand):
 
             if item.get('url'):
                 link_map[placeholder] = item['url']
-            elif task_type == 'quiz' and item.get('ref_title'):
-                quiz_id = quiz_map.get(item['ref_title'])
-                if quiz_id:
-                    link_map[placeholder] = f'/quizzes/{quiz_id}'
-            elif task_type in ('assignment', 'discussion') and item.get('ref_title'):
-                asgn_id = assignment_map.get(item['ref_title'])
-                if asgn_id:
-                    link_map[placeholder] = f'/assignments/{asgn_id}'
+            elif item.get('ref_title'):
+                ref = item['ref_title']
+                if task_type == 'quiz' and ref in quiz_map:
+                    link_map[placeholder] = f'/quizzes/{quiz_map[ref]}'
+                elif ref in assignment_map:
+                    link_map[placeholder] = f'/assignments/{assignment_map[ref]}'
+                elif ref in quiz_map:
+                    link_map[placeholder] = f'/quizzes/{quiz_map[ref]}'
             elif item.get('s3_key') or item.get('filename'):
                 filename = item.get('filename', '')
                 title = item.get('label', filename)

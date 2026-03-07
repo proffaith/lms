@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'apps.curriculum',
     'apps.assessments',
     'apps.progress',
+    'apps.feed',
 ]
 
 MIDDLEWARE = [
