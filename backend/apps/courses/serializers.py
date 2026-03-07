@@ -31,10 +31,20 @@ class LessonListSerializer(serializers.ModelSerializer):
 
 class ModuleSerializer(serializers.ModelSerializer):
     lessons = LessonListSerializer(many=True, read_only=True)
+    quiz_count = serializers.SerializerMethodField()
+    assignment_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Module
-        fields = ['id', 'title', 'description', 'order', 'lessons']
+        fields = ['id', 'title', 'description', 'order', 'lessons', 'quiz_count', 'assignment_count']
+
+    def get_quiz_count(self, obj):
+        from apps.assessments.models import Quiz
+        return Quiz.objects.filter(lesson__module=obj).count()
+
+    def get_assignment_count(self, obj):
+        from apps.assessments.models import Assignment
+        return Assignment.objects.filter(lesson__module=obj).count()
 
 
 class CourseListSerializer(serializers.ModelSerializer):

@@ -1,12 +1,18 @@
 import json
+import logging
+import os
 
+from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.utils.text import slugify
 from rest_framework import filters, generics, permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 from apps.accounts.permissions import (
     IsCourseOwnerOrAdmin,
@@ -66,6 +72,11 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(instructor=self.request.user)
 
+    def perform_destroy(self, instance):
+        if self.request.user.role != 'admin' and instance.instructor != self.request.user:
+            raise PermissionDenied('Only the course owner or an admin can delete a course.')
+        instance.delete()
+
     @action(detail=True, methods=['post'])
     def enroll(self, request, slug=None):
         course = self.get_object()
@@ -96,6 +107,27 @@ class CourseViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, slug=None):
+        course = self.get_object()
+        course.status = Course.Status.ARCHIVED
+        course.save(update_fields=['status'])
+        return Response({'detail': 'Course archived.'})
+
+    @action(detail=True, methods=['post'], url_path='change-status')
+    def change_status(self, request, slug=None):
+        course = self.get_object()
+        new_status = request.data.get('status')
+        valid_statuses = dict(Course.Status.choices)
+        if new_status not in valid_statuses:
+            return Response(
+                {'detail': f'Invalid status. Choose from: {", ".join(valid_statuses.keys())}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        course.status = new_status
+        course.save(update_fields=['status'])
+        return Response({'detail': f'Course status changed to {new_status}.'})
 
 
 class ModuleViewSet(viewsets.ModelViewSet):
@@ -211,9 +243,37 @@ class CourseImportView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Check if updating an existing course
+        course_slug = request.data.get('course_slug')
+
         try:
             with transaction.atomic():
-                course = self._import(data, request.user)
+                if course_slug:
+                    # Update existing course
+                    try:
+                        course = Course.objects.get(slug=course_slug)
+                    except Course.DoesNotExist:
+                        return Response(
+                            {'detail': f'Course with slug "{course_slug}" not found.'},
+                            status=status.HTTP_404_NOT_FOUND,
+                        )
+
+                    # Permission check: admin or course owner
+                    if request.user.role != 'admin' and course.instructor != request.user:
+                        return Response(
+                            {'detail': 'You do not have permission to update this course.'},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+
+                    self._update_import(data, course)
+                    resp_status = status.HTTP_200_OK
+                    detail = 'Course updated successfully.'
+                else:
+                    # Create new course
+                    course = self._create_course(data, request.user)
+                    self._create_content(data, course)
+                    resp_status = status.HTTP_201_CREATED
+                    detail = 'Course imported successfully.'
         except Exception as e:
             return Response(
                 {'detail': f'Import failed: {e}'},
@@ -222,20 +282,15 @@ class CourseImportView(APIView):
 
         return Response(
             {
-                'detail': 'Course imported successfully.',
+                'detail': detail,
                 'slug': course.slug,
                 'title': course.title,
             },
-            status=status.HTTP_201_CREATED,
+            status=resp_status,
         )
 
-    def _import(self, data, instructor):
-        from apps.assessments.models import (
-            AnswerChoice, Assignment, Question, Quiz,
-        )
-        from apps.curriculum.models import CourseObjective
-
-        # Create course
+    def _create_course(self, data, instructor):
+        """Create a new course record with a unique slug."""
         course_data = data['course']
         title = course_data['title']
         base_slug = slugify(title)
@@ -245,13 +300,67 @@ class CourseImportView(APIView):
             slug = f'{base_slug}-{counter}'
             counter += 1
 
-        course = Course.objects.create(
+        return Course.objects.create(
             title=title,
             slug=slug,
             description=course_data.get('description', ''),
             instructor=instructor,
             status=Course.Status.DRAFT,
         )
+
+    def _update_import(self, data, course):
+        """Replace all content of an existing course with imported data."""
+        from apps.curriculum.models import CourseObjective
+
+        # Update course metadata (preserve slug, status, instructor, enrollments)
+        course_data = data['course']
+        course.title = course_data['title']
+        course.description = course_data.get('description', '')
+        course.save(update_fields=['title', 'description'])
+
+        # Delete old content (cascade removes lessons, contents, quizzes, etc.)
+        CourseObjective.objects.filter(course=course).delete()
+        course.modules.all().delete()
+
+        # Re-create content from import data
+        self._create_content(data, course)
+
+    def _download_s3_file(self, s3_key: str, s3_bucket: str = '') -> bytes | None:
+        """Download a file from S3. Returns bytes or None on failure."""
+        try:
+            import boto3
+        except ImportError:
+            logger.warning("boto3 not installed — cannot download S3 files")
+            return None
+
+        aws_key = os.environ.get('AWS_ACCESS_KEY')
+        aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
+        region = os.environ.get('AWS_REGION', 'us-east-2')
+        bucket = s3_bucket or os.environ.get('AWS_S3_BUCKET', 'proffaith-uploads')
+
+        if not aws_key or not aws_secret:
+            logger.warning("AWS credentials not configured — cannot download S3 files")
+            return None
+
+        try:
+            client = boto3.client(
+                's3',
+                aws_access_key_id=aws_key,
+                aws_secret_access_key=aws_secret,
+                region_name=region,
+            )
+            response = client.get_object(Bucket=bucket, Key=s3_key)
+            return response['Body'].read()
+        except Exception as e:
+            logger.warning(f"Failed to download s3://{bucket}/{s3_key}: {e}")
+            return None
+
+    def _create_content(self, data, course):
+        """Create objectives, modules, lessons, contents, quizzes, and assignments."""
+        from apps.assessments.models import (
+            AnswerChoice, Assignment, Question, Quiz,
+        )
+        from apps.curriculum.models import CourseObjective
 
         # Create objectives
         objective_map = {}
@@ -285,13 +394,40 @@ class CourseImportView(APIView):
                     first_lesson = lesson
 
                 for content_data in lesson_data.get('contents', []):
-                    LessonContent.objects.create(
-                        lesson=lesson,
-                        content_type=content_data.get('content_type', 'text'),
-                        title=content_data.get('title', ''),
-                        text_content=content_data.get('text_content', ''),
-                        order=content_data.get('order', 0),
-                    )
+                    content_type = content_data.get('content_type', 'text')
+
+                    if content_type == 'file' and content_data.get('s3_key'):
+                        # Download file from S3 and save to Django FileField
+                        lc = LessonContent(
+                            lesson=lesson,
+                            content_type='file',
+                            title=content_data.get('title', ''),
+                            order=content_data.get('order', 0),
+                        )
+                        file_bytes = self._download_s3_file(
+                            content_data['s3_key'],
+                            content_data.get('s3_bucket', ''),
+                        )
+                        if file_bytes:
+                            filename = content_data.get('filename', 'file.pdf')
+                            lc.file.save(filename, ContentFile(file_bytes), save=False)
+                        else:
+                            # S3 download failed — fall back to text with info
+                            lc.content_type = 'text'
+                            lc.text_content = (
+                                f'<p><em>File not available: '
+                                f'{content_data.get("title", content_data.get("filename", "unknown"))}'
+                                f'</em></p>'
+                            )
+                        lc.save()
+                    else:
+                        LessonContent.objects.create(
+                            lesson=lesson,
+                            content_type=content_type,
+                            title=content_data.get('title', ''),
+                            text_content=content_data.get('text_content', ''),
+                            order=content_data.get('order', 0),
+                        )
 
             if first_lesson is None:
                 first_lesson = Lesson.objects.create(
@@ -336,5 +472,3 @@ class CourseImportView(APIView):
                     max_score=asgn_data.get('max_score', 100),
                     course_objective=objective_map.get(obj_code),
                 )
-
-        return course

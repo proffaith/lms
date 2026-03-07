@@ -78,6 +78,8 @@ export interface Module {
   description: string
   order: number
   lessons: LessonSummary[]
+  quiz_count: number
+  assignment_count: number
 }
 
 export interface LessonSummary {

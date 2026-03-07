@@ -11,21 +11,34 @@ import {
   Type,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import DOMPurify from 'dompurify'
 import toast from 'react-hot-toast'
 import api from '@/lib/api'
 import type { CourseDetail, Lesson, LessonContent, Quiz, Assignment } from '@/types'
 
+const HTML_TAG_REGEX = /<[a-z][\s\S]*>/i
+
 function ContentRenderer({ content }: { content: LessonContent }) {
   if (content.content_type === 'text') {
+    const isHtml = HTML_TAG_REGEX.test(content.text_content || '')
     return (
-      <div className="prose prose-sm max-w-none">
+      <div>
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
           <Type className="w-4 h-4" />
           {content.title || 'Text Content'}
         </div>
-        <div className="whitespace-pre-wrap text-gray-700 bg-gray-50 rounded-lg p-4">
-          {content.text_content}
-        </div>
+        {isHtml ? (
+          <div
+            className="prose prose-sm max-w-none bg-gray-50 rounded-lg p-4"
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(content.text_content),
+            }}
+          />
+        ) : (
+          <div className="whitespace-pre-wrap text-gray-700 bg-gray-50 rounded-lg p-4">
+            {content.text_content}
+          </div>
+        )}
       </div>
     )
   }

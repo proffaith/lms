@@ -6,10 +6,15 @@ Usage:
 """
 
 import json
+import logging
+import os
 
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.text import slugify
+
+logger = logging.getLogger(__name__)
 
 from apps.accounts.models import User
 from apps.assessments.models import (
@@ -134,13 +139,45 @@ class Command(BaseCommand):
 
                 # Create lesson contents
                 for content_data in lesson_data.get('contents', []):
-                    LessonContent.objects.create(
-                        lesson=lesson,
-                        content_type=content_data.get('content_type', 'text'),
-                        title=content_data.get('title', ''),
-                        text_content=content_data.get('text_content', ''),
-                        order=content_data.get('order', 0),
-                    )
+                    content_type = content_data.get('content_type', 'text')
+
+                    if content_type == 'file' and content_data.get('s3_key'):
+                        # Download file from S3 and save to Django FileField
+                        lc = LessonContent(
+                            lesson=lesson,
+                            content_type='file',
+                            title=content_data.get('title', ''),
+                            order=content_data.get('order', 0),
+                        )
+                        file_bytes = self._download_s3_file(
+                            content_data['s3_key'],
+                            content_data.get('s3_bucket', ''),
+                        )
+                        if file_bytes:
+                            filename = content_data.get('filename', 'file.pdf')
+                            lc.file.save(filename, ContentFile(file_bytes), save=False)
+                            self.stdout.write(f'    Downloaded: {filename}')
+                        else:
+                            lc.content_type = 'text'
+                            lc.text_content = (
+                                f'<p><em>File not available: '
+                                f'{content_data.get("title", content_data.get("filename", "unknown"))}'
+                                f'</em></p>'
+                            )
+                            self.stdout.write(
+                                self.style.WARNING(
+                                    f'    Could not download: {content_data.get("filename", "unknown")}'
+                                )
+                            )
+                        lc.save()
+                    else:
+                        LessonContent.objects.create(
+                            lesson=lesson,
+                            content_type=content_type,
+                            title=content_data.get('title', ''),
+                            text_content=content_data.get('text_content', ''),
+                            order=content_data.get('order', 0),
+                        )
 
             # If no lessons were created, make a placeholder for quizzes/assignments
             if first_lesson is None:
@@ -193,6 +230,36 @@ class Command(BaseCommand):
                     is_correct=choice_data.get('is_correct', False),
                     order=choice_data.get('order', 0),
                 )
+
+    def _download_s3_file(self, s3_key: str, s3_bucket: str = '') -> bytes | None:
+        """Download a file from S3. Returns bytes or None on failure."""
+        try:
+            import boto3
+        except ImportError:
+            self.stdout.write(self.style.WARNING('boto3 not installed — cannot download S3 files'))
+            return None
+
+        aws_key = os.environ.get('AWS_ACCESS_KEY')
+        aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
+        region = os.environ.get('AWS_REGION', 'us-east-2')
+        bucket = s3_bucket or os.environ.get('AWS_S3_BUCKET', 'proffaith-uploads')
+
+        if not aws_key or not aws_secret:
+            self.stdout.write(self.style.WARNING('AWS credentials not configured'))
+            return None
+
+        try:
+            client = boto3.client(
+                's3',
+                aws_access_key_id=aws_key,
+                aws_secret_access_key=aws_secret,
+                region_name=region,
+            )
+            response = client.get_object(Bucket=bucket, Key=s3_key)
+            return response['Body'].read()
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'S3 download failed for {s3_key}: {e}'))
+            return None
 
     def _create_assignment(self, asgn_data, lesson, objective_map):
         """Create an Assignment record."""

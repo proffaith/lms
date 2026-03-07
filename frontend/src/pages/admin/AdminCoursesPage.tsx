@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  Archive,
   BookOpen,
   Edit,
   ExternalLink,
   Search,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import toast from 'react-hot-toast'
 import api from '@/lib/api'
 import type { Course, PaginatedResponse } from '@/types'
 
@@ -16,6 +19,8 @@ export default function AdminCoursesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Course | null>(null)
 
   useEffect(() => {
     api.get<PaginatedResponse<Course>>('/courses/')
@@ -34,6 +39,54 @@ export default function AdminCoursesPage() {
     published: 'bg-green-100 text-green-700',
     draft: 'bg-yellow-100 text-yellow-700',
     archived: 'bg-gray-100 text-gray-600',
+  }
+
+  const handleStatusChange = async (course: Course, newStatus: string) => {
+    setActionLoading(course.slug)
+    try {
+      await api.post(`/courses/${course.slug}/change-status/`, { status: newStatus })
+      setCourses((prev) =>
+        prev.map((c) =>
+          c.slug === course.slug ? { ...c, status: newStatus as Course['status'] } : c,
+        ),
+      )
+      toast.success(`"${course.title}" is now ${newStatus}.`)
+    } catch {
+      toast.error('Failed to change status.')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleArchive = async (course: Course) => {
+    setActionLoading(course.slug)
+    try {
+      await api.post(`/courses/${course.slug}/archive/`)
+      setCourses((prev) =>
+        prev.map((c) =>
+          c.slug === course.slug ? { ...c, status: 'archived' as Course['status'] } : c,
+        ),
+      )
+      toast.success(`"${course.title}" archived.`)
+    } catch {
+      toast.error('Failed to archive course.')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDelete = async (course: Course) => {
+    setActionLoading(course.slug)
+    try {
+      await api.delete(`/courses/${course.slug}/`)
+      setCourses((prev) => prev.filter((c) => c.slug !== course.slug))
+      toast.success(`"${course.title}" deleted.`)
+      setDeleteTarget(null)
+    } catch {
+      toast.error('Failed to delete course.')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   if (loading) return <p className="text-gray-500">Loading courses...</p>
@@ -69,7 +122,7 @@ export default function AdminCoursesPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow-sm p-4 text-center">
           <div className="text-xl font-bold text-gray-900">{courses.length}</div>
           <div className="text-xs text-gray-500">Total</div>
@@ -79,6 +132,12 @@ export default function AdminCoursesPage() {
             {courses.filter((c) => c.status === 'published').length}
           </div>
           <div className="text-xs text-gray-500">Published</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm p-4 text-center">
+          <div className="text-xl font-bold text-gray-400">
+            {courses.filter((c) => c.status === 'archived').length}
+          </div>
+          <div className="text-xs text-gray-500">Archived</div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4 text-center">
           <div className="text-xl font-bold text-purple-600">
@@ -134,7 +193,7 @@ export default function AdminCoursesPage() {
                     {new Date(c.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-3">
+                    <div className="flex items-center justify-end gap-2">
                       <Link
                         to={`/courses/${c.slug}`}
                         className="text-xs text-gray-600 hover:text-blue-600 flex items-center gap-1"
@@ -147,6 +206,57 @@ export default function AdminCoursesPage() {
                       >
                         <Edit className="w-3 h-3" /> Edit
                       </Link>
+
+                      {/* Status toggle */}
+                      {c.status === 'draft' && (
+                        <button
+                          onClick={() => handleStatusChange(c, 'published')}
+                          disabled={actionLoading === c.slug}
+                          className="text-xs text-green-600 hover:underline disabled:opacity-50"
+                        >
+                          Publish
+                        </button>
+                      )}
+                      {c.status === 'published' && (
+                        <button
+                          onClick={() => handleStatusChange(c, 'draft')}
+                          disabled={actionLoading === c.slug}
+                          className="text-xs text-yellow-600 hover:underline disabled:opacity-50"
+                        >
+                          Unpublish
+                        </button>
+                      )}
+                      {c.status === 'archived' && (
+                        <button
+                          onClick={() => handleStatusChange(c, 'draft')}
+                          disabled={actionLoading === c.slug}
+                          className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                        >
+                          Restore
+                        </button>
+                      )}
+
+                      {/* Archive (only for non-archived) */}
+                      {c.status !== 'archived' && (
+                        <button
+                          onClick={() => handleArchive(c)}
+                          disabled={actionLoading === c.slug}
+                          className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-0.5 disabled:opacity-50"
+                          title="Archive"
+                        >
+                          <Archive className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      {/* Delete */}
+                      <button
+                        onClick={() => setDeleteTarget(c)}
+                        disabled={actionLoading === c.slug}
+                        className="text-xs text-red-500 hover:text-red-700 flex items-center gap-0.5 disabled:opacity-50"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -155,6 +265,44 @@ export default function AdminCoursesPage() {
           </table>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Course</h3>
+            <p className="text-sm text-gray-600 mb-1">
+              Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>?
+            </p>
+            <p className="text-xs text-red-600 mb-4">
+              This will permanently remove the course and all its content, including
+              modules, lessons, quizzes, assignments, and student submissions.
+              This action cannot be undone.
+            </p>
+            {deleteTarget.enrollment_count > 0 && (
+              <p className="text-xs text-amber-600 mb-4 font-medium">
+                Warning: {deleteTarget.enrollment_count} student(s) are currently enrolled
+                in this course.
+              </p>
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteTarget)}
+                disabled={actionLoading === deleteTarget.slug}
+                className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {actionLoading === deleteTarget.slug ? 'Deleting...' : 'Delete Course'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

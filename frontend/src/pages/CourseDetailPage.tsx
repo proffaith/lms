@@ -5,6 +5,8 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
+  ClipboardList,
+  FileQuestion,
   Target,
   Users,
 } from 'lucide-react'
@@ -198,7 +200,7 @@ export default function CourseDetailPage() {
                   onClick={() => toggleModule(mod.id)}
                   className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {expandedModules.has(mod.id) ? (
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     ) : (
@@ -208,6 +210,18 @@ export default function CourseDetailPage() {
                     <span className="text-xs text-gray-400">
                       {mod.lessons.length} lesson{mod.lessons.length !== 1 ? 's' : ''}
                     </span>
+                    {mod.quiz_count > 0 && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">
+                        <FileQuestion className="w-3 h-3" />
+                        {mod.quiz_count} quiz{mod.quiz_count !== 1 ? 'zes' : ''}
+                      </span>
+                    )}
+                    {mod.assignment_count > 0 && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
+                        <ClipboardList className="w-3 h-3" />
+                        {mod.assignment_count} assignment{mod.assignment_count !== 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                 </button>
 
