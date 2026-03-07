@@ -3,8 +3,6 @@ import { useParams } from 'react-router-dom'
 import {
   Calendar,
   CheckCircle2,
-  ChevronRight,
-  Clock,
   FileText,
   Upload,
 } from 'lucide-react'

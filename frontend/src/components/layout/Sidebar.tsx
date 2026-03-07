@@ -7,6 +7,7 @@ import {
   Home,
   Settings,
   Target,
+  Upload,
   Users,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
@@ -32,9 +33,14 @@ const navItems: NavItem[] = [
   // Admin
   { label: 'Manage Users', path: '/admin/users', icon: <Users className="w-5 h-5" />, roles: ['admin'] },
   { label: 'Manage Courses', path: '/admin/courses', icon: <Settings className="w-5 h-5" />, roles: ['admin'] },
+  { label: 'Import Course', path: '/admin/import', icon: <Upload className="w-5 h-5" />, roles: ['admin'] },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
 
@@ -51,6 +57,7 @@ export function Sidebar() {
           <Link
             key={item.path}
             to={item.path}
+            onClick={onNavigate}
             className={clsx(
               'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
               location.pathname === item.path

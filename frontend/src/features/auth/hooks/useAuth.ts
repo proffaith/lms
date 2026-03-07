@@ -21,6 +21,8 @@ export function useAuth() {
 
   const handleLogin = async (username: string, password: string) => {
     const { data } = await authApi.login(username, password)
+    // Store tokens first so the interceptor can attach the Bearer token
+    useAuthStore.getState().setTokens(data.access, data.refresh)
     const meRes = await authApi.getMe()
     login(meRes.data, data.access, data.refresh)
     navigate('/')

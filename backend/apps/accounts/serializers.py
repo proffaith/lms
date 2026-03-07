@@ -48,6 +48,17 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         return obj.get_full_name() or obj.username
 
 
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Admin view — can update role and is_active."""
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'role', 'bio', 'is_active', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'username', 'created_at', 'updated_at']
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField()
     new_password = serializers.CharField(validators=[validate_password])
@@ -57,3 +68,13 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError('Old password is incorrect.')
         return value
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.CharField(help_text='Username or email')
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(validators=[validate_password])

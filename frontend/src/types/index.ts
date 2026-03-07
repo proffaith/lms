@@ -210,6 +210,31 @@ export interface Certificate {
   issued_at: string
 }
 
+// Admin
+export interface AdminUser {
+  id: number
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  role: UserRole
+  bio: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PlatformStats {
+  total_users: number
+  students: number
+  instructors: number
+  admins: number
+  total_courses: number
+  published_courses: number
+  total_enrollments: number
+  pending_submissions: number
+}
+
 // API
 export interface PaginatedResponse<T> {
   count: number

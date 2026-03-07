@@ -9,16 +9,26 @@ import CourseDetailPage from '@/pages/CourseDetailPage'
 import LessonPage from '@/pages/LessonPage'
 import QuizPage from '@/pages/QuizPage'
 import AssignmentPage from '@/pages/AssignmentPage'
+import ProgressPage from '@/pages/ProgressPage'
+import CertificatesPage from '@/pages/CertificatesPage'
+import CertificateViewPage from '@/pages/CertificateViewPage'
 import ProgramsPage from '@/pages/ProgramsPage'
 import CourseBuilderPage from '@/pages/instructor/CourseBuilderPage'
 import InstructorCoursesPage from '@/pages/instructor/InstructorCoursesPage'
 import QuizBuilderPage from '@/pages/instructor/QuizBuilderPage'
 import SubmissionsPage from '@/pages/instructor/SubmissionsPage'
+import AdminUsersPage from '@/pages/admin/AdminUsersPage'
+import AdminCoursesPage from '@/pages/admin/AdminCoursesPage'
+import ImportCoursePage from '@/pages/admin/ImportCoursePage'
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
+import ResetPasswordPage from '@/pages/ResetPasswordPage'
 
 export const router = createBrowserRouter([
   // Public routes
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password/:uid/:token', element: <ResetPasswordPage /> },
 
   // Protected routes
   {
@@ -35,8 +45,9 @@ export const router = createBrowserRouter([
       { path: 'courses/:slug/learn/:lessonId', element: <LessonPage /> },
       { path: 'quizzes/:quizId', element: <QuizPage /> },
       { path: 'assignments/:assignmentId', element: <AssignmentPage /> },
-      { path: 'progress', element: <div>My Progress (Coming Soon)</div> },
-      { path: 'my-certificates', element: <div>My Certificates (Coming Soon)</div> },
+      { path: 'progress', element: <ProgressPage /> },
+      { path: 'my-certificates', element: <CertificatesPage /> },
+      { path: 'certificates/:uuid', element: <CertificateViewPage /> },
       { path: 'programs', element: <ProgramsPage /> },
       // Instructor routes
       { path: 'instructor/courses', element: <InstructorCoursesPage /> },
@@ -46,8 +57,9 @@ export const router = createBrowserRouter([
       { path: 'instructor/quizzes/:quizId/edit', element: <QuizBuilderPage /> },
       { path: 'instructor/submissions', element: <SubmissionsPage /> },
       // Admin routes
-      { path: 'admin/users', element: <div>Manage Users (Coming Soon)</div> },
-      { path: 'admin/courses', element: <div>Manage Courses (Coming Soon)</div> },
+      { path: 'admin/users', element: <AdminUsersPage /> },
+      { path: 'admin/courses', element: <AdminCoursesPage /> },
+      { path: 'admin/import', element: <ImportCoursePage /> },
     ],
   },
 ])
