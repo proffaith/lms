@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardList,
   FileQuestion,
+  Rss,
   Target,
   Users,
 } from 'lucide-react'
@@ -148,7 +149,7 @@ export default function CourseDetailPage() {
                 to={`/courses/${slug}/feed`}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center gap-2"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                <Rss className="w-4 h-4" />
                 Course Feed
               </Link>
             )}
@@ -190,6 +191,27 @@ export default function CourseDetailPage() {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* Course Feed CTA */}
+      {(course.is_enrolled || canEdit) && (
+        <Link
+          to={`/courses/${slug}/feed`}
+          className="block bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg shadow-sm p-5 mb-6 border border-blue-100 hover:shadow-md transition-shadow group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 rounded-lg p-3 group-hover:bg-blue-200 transition-colors">
+              <Rss className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 mb-0.5">Course Feed</h3>
+              <p className="text-sm text-gray-600">
+                Follow the latest research, discussions, and contributions from your class
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+          </div>
+        </Link>
       )}
 
       {/* Course Content (Modules & Lessons) */}

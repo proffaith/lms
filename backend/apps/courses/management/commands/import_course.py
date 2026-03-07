@@ -26,6 +26,7 @@ from apps.assessments.models import (
 )
 from apps.courses.models import Course, Lesson, LessonContent, Module
 from apps.curriculum.models import CourseObjective
+from apps.feed.models import FeedItem
 
 
 class Command(BaseCommand):
@@ -72,6 +73,8 @@ class Command(BaseCommand):
             course = self._create_course(data['course'], instructor)
             objective_map = self._create_objectives(data.get('objectives', []), course)
             self._create_modules(data.get('modules', []), course, objective_map)
+            self._create_feed_items(data.get('feed_items', []), course, objective_map)
+            self._create_milestone_items(data.get('modules', []), course)
 
         self.stdout.write(self.style.SUCCESS(
             f'Successfully imported: "{course.title}" (slug: {course.slug})'
@@ -355,3 +358,54 @@ class Command(BaseCommand):
             return match.group(0)
 
         return re.sub(r'🔗\s*\[INSERT LINK:\s*(.+?)\]', replace_placeholder, html)
+
+    def _create_feed_items(self, feed_items_data, course, objective_map):
+        """Create FeedItem records from exported discussion posts (research items)."""
+        if not feed_items_data:
+            return
+
+        count = 0
+        for item_data in feed_items_data:
+            course_objective = None
+            obj_code = item_data.get('objective_code')
+            if obj_code and obj_code in objective_map:
+                course_objective = objective_map[obj_code]
+
+            FeedItem.objects.create(
+                course=course,
+                author=None,  # Research pipeline items have no author
+                item_type=item_data.get('item_type', 'research'),
+                title=item_data['title'],
+                summary=item_data.get('summary', ''),
+                body_html=item_data.get('body_html', ''),
+                source_url=item_data.get('source_url', ''),
+                course_objective=course_objective,
+            )
+            count += 1
+
+        if count:
+            self.stdout.write(f'  Created {count} feed items')
+
+    def _create_milestone_items(self, modules_data, course):
+        """Auto-generate a milestone feed item for each module.
+
+        Creates one FeedItem(item_type='milestone') per module so the feed
+        stream has waypoints that mark course progression from day one.
+        """
+        if not modules_data:
+            return
+
+        count = 0
+        for mod_data in modules_data:
+            title = mod_data.get('title', f'Module {mod_data.get("order", 0) + 1}')
+            FeedItem.objects.create(
+                course=course,
+                author=None,
+                item_type='milestone',
+                title=title,
+                summary=mod_data.get('description', ''),
+            )
+            count += 1
+
+        if count:
+            self.stdout.write(f'  Created {count} milestone feed items')

@@ -312,6 +312,7 @@ class CourseImportView(APIView):
     def _update_import(self, data, course):
         """Replace all content of an existing course with imported data."""
         from apps.curriculum.models import CourseObjective
+        from apps.feed.models import FeedItem
 
         # Update course metadata (preserve slug, status, instructor, enrollments)
         course_data = data['course']
@@ -322,6 +323,8 @@ class CourseImportView(APIView):
         # Delete old content (cascade removes lessons, contents, quizzes, etc.)
         CourseObjective.objects.filter(course=course).delete()
         course.modules.all().delete()
+        # Delete old imported feed items (author=None means auto-generated)
+        FeedItem.objects.filter(course=course, author__isnull=True).delete()
 
         # Re-create content from import data
         self._create_content(data, course)
@@ -510,6 +513,56 @@ class CourseImportView(APIView):
                         text_content=text,
                         order=content_data.get('order', 0),
                     )
+
+        # Create feed items from exported discussion posts
+        self._create_feed_items(data.get('feed_items', []), course, objective_map)
+        # Auto-generate milestone feed items per module
+        self._create_milestone_items(data.get('modules', []), course)
+
+    def _create_feed_items(self, feed_items_data, course, objective_map):
+        """Create FeedItem records from exported discussion posts (research items)."""
+        from apps.feed.models import FeedItem
+
+        if not feed_items_data:
+            return
+
+        for item_data in feed_items_data:
+            course_objective = None
+            obj_code = item_data.get('objective_code')
+            if obj_code and obj_code in objective_map:
+                course_objective = objective_map[obj_code]
+
+            FeedItem.objects.create(
+                course=course,
+                author=None,  # Research pipeline items have no author
+                item_type=item_data.get('item_type', 'research'),
+                title=item_data['title'],
+                summary=item_data.get('summary', ''),
+                body_html=item_data.get('body_html', ''),
+                source_url=item_data.get('source_url', ''),
+                course_objective=course_objective,
+            )
+
+    def _create_milestone_items(self, modules_data, course):
+        """Auto-generate a milestone feed item for each module.
+
+        Creates one FeedItem(item_type='milestone') per module so the feed
+        stream has waypoints that mark course progression from day one.
+        """
+        from apps.feed.models import FeedItem
+
+        if not modules_data:
+            return
+
+        for mod_data in modules_data:
+            title = mod_data.get('title', f'Module {mod_data.get("order", 0) + 1}')
+            FeedItem.objects.create(
+                course=course,
+                author=None,
+                item_type='milestone',
+                title=title,
+                summary=mod_data.get('description', ''),
+            )
 
     def _resolve_checklist_links(self, html, checklist_items, quiz_map, assignment_map, lesson):
         """Replace [INSERT LINK: X] placeholders with actual <a> tags.
