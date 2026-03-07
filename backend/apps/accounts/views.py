@@ -36,17 +36,30 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        # Auto-enroll if registration was via enrollment token
+        enrollment_course = serializer.context.get('enrollment_course')
+        course_slug = None
+        if enrollment_course:
+            from apps.courses.models import Enrollment
+            Enrollment.objects.get_or_create(
+                student=user,
+                course=enrollment_course,
+            )
+            course_slug = enrollment_course.slug
+
         refresh = RefreshToken.for_user(user)
-        return Response(
-            {
-                'user': UserSerializer(user).data,
-                'tokens': {
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh),
-                },
+        response_data = {
+            'user': UserSerializer(user).data,
+            'tokens': {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
             },
-            status=status.HTTP_201_CREATED,
-        )
+        }
+        if course_slug:
+            response_data['enrolled_course_slug'] = course_slug
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class LoginView(TokenObtainPairView):

@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import uuid
 
 from django.core.files.base import ContentFile
 from django.db import models, transaction
@@ -129,6 +130,57 @@ class CourseViewSet(viewsets.ModelViewSet):
         course.status = new_status
         course.save(update_fields=['status'])
         return Response({'detail': f'Course status changed to {new_status}.'})
+
+    @action(detail=True, methods=['post'], url_path='generate-token')
+    def generate_token(self, request, slug=None):
+        """Generate or regenerate the enrollment token for this course."""
+        course = self.get_object()
+        if request.user.role != 'admin' and course.instructor != request.user:
+            raise PermissionDenied('Only the course owner or an admin can manage tokens.')
+        course.enrollment_token = uuid.uuid4()
+        course.save(update_fields=['enrollment_token'])
+        return Response({
+            'enrollment_token': str(course.enrollment_token),
+            'registration_url': f'/register?token={course.enrollment_token}',
+        })
+
+    @action(detail=True, methods=['delete'], url_path='delete-token')
+    def delete_token(self, request, slug=None):
+        """Remove the enrollment token (disable token-based registration)."""
+        course = self.get_object()
+        if request.user.role != 'admin' and course.instructor != request.user:
+            raise PermissionDenied('Only the course owner or an admin can manage tokens.')
+        course.enrollment_token = None
+        course.save(update_fields=['enrollment_token'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EnrollmentTokenValidateView(APIView):
+    """Public endpoint: validate an enrollment token and return course info."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get('token')
+        if not token:
+            return Response(
+                {'detail': 'Token is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            course = Course.objects.select_related('instructor').get(
+                enrollment_token=token,
+                status=Course.Status.PUBLISHED,
+            )
+        except (Course.DoesNotExist, ValueError):
+            return Response(
+                {'detail': 'Invalid or expired enrollment token.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({
+            'course_title': course.title,
+            'course_slug': course.slug,
+            'instructor_name': course.instructor.get_full_name() or course.instructor.username,
+        })
 
 
 class ModuleViewSet(viewsets.ModelViewSet):

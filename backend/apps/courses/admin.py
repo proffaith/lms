@@ -10,10 +10,11 @@ class ModuleInline(admin.TabularInline):
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ['title', 'instructor', 'program', 'status', 'created_at']
+    list_display = ['title', 'instructor', 'program', 'status', 'enrollment_token', 'created_at']
     list_filter = ['status', 'program']
     search_fields = ['title', 'description']
     prepopulated_fields = {'slug': ('title',)}
+    readonly_fields = ['enrollment_token']
     inlines = [ModuleInline]
 
 

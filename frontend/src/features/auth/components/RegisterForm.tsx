@@ -1,9 +1,24 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { authApi } from '../services/authApi'
+
+interface TokenCourseInfo {
+  course_title: string
+  course_slug: string
+  instructor_name: string
+}
 
 export function RegisterForm() {
   const { handleRegister } = useAuth()
+  const [searchParams] = useSearchParams()
+  const enrollmentToken = searchParams.get('token')
+
+  const [courseInfo, setCourseInfo] = useState<TokenCourseInfo | null>(null)
+  const [tokenError, setTokenError] = useState('')
+  const [tokenLoading, setTokenLoading] = useState(!!enrollmentToken)
+
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -15,6 +30,22 @@ export function RegisterForm() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Validate enrollment token on mount
+  useEffect(() => {
+    if (!enrollmentToken) return
+    setTokenLoading(true)
+    authApi
+      .validateEnrollmentToken(enrollmentToken)
+      .then((res) => {
+        setCourseInfo(res.data)
+        setFormData((prev) => ({ ...prev, role: 'student' }))
+      })
+      .catch(() => {
+        setTokenError('This enrollment link is invalid or has expired.')
+      })
+      .finally(() => setTokenLoading(false))
+  }, [enrollmentToken])
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -29,7 +60,10 @@ export function RegisterForm() {
     }
     setLoading(true)
     try {
-      await handleRegister(formData)
+      await handleRegister({
+        ...formData,
+        ...(enrollmentToken ? { enrollment_token: enrollmentToken } : {}),
+      })
     } catch (err: any) {
       const detail = err.response?.data
       if (detail && typeof detail === 'object') {
@@ -43,6 +77,32 @@ export function RegisterForm() {
     }
   }
 
+  // Token loading state
+  if (tokenLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="flex items-center gap-3 text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Validating enrollment link...
+        </div>
+      </div>
+    )
+  }
+
+  // Token error state
+  if (enrollmentToken && tokenError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8 text-center">
+          <p className="text-red-600 mb-4">{tokenError}</p>
+          <Link to="/register" className="text-blue-600 hover:underline text-sm">
+            Register without an enrollment link
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
@@ -50,6 +110,17 @@ export function RegisterForm() {
           <h1 className="text-2xl font-bold text-gray-900 text-center mb-6">
             Create an Account
           </h1>
+
+          {/* Course enrollment banner */}
+          {courseInfo && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1">
+                You are registering for
+              </p>
+              <p className="text-lg font-bold text-gray-900">{courseInfo.course_title}</p>
+              <p className="text-sm text-blue-700">by {courseInfo.instructor_name}</p>
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm">
@@ -116,21 +187,24 @@ export function RegisterForm() {
               />
             </div>
 
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                Role
-              </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={onChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="student">Student</option>
-                <option value="instructor">Instructor</option>
-              </select>
-            </div>
+            {/* Only show role selector when NOT registering via token */}
+            {!enrollmentToken && (
+              <div>
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <select
+                  id="role"
+                  name="role"
+                  value={formData.role}
+                  onChange={onChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="student">Student</option>
+                  <option value="instructor">Instructor</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
@@ -167,7 +241,11 @@ export function RegisterForm() {
               disabled={loading}
               className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading
+                ? 'Creating account...'
+                : courseInfo
+                  ? 'Create Account & Enroll'
+                  : 'Create Account'}
             </button>
           </form>
 

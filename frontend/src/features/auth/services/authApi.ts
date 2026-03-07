@@ -9,6 +9,13 @@ interface LoginResponse {
 interface RegisterResponse {
   user: User
   tokens: AuthTokens
+  enrolled_course_slug?: string
+}
+
+interface TokenValidationResponse {
+  course_title: string
+  course_slug: string
+  instructor_name: string
 }
 
 export const authApi = {
@@ -23,7 +30,13 @@ export const authApi = {
     first_name: string
     last_name: string
     role: string
+    enrollment_token?: string
   }) => api.post<RegisterResponse>('/auth/register/', data),
+
+  validateEnrollmentToken: (token: string) =>
+    api.get<TokenValidationResponse>('/enrollment-token/validate/', {
+      params: { token },
+    }),
 
   logout: (refresh: string) =>
     api.post('/auth/logout/', { refresh }),

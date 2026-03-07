@@ -36,10 +36,16 @@ export function useAuth() {
     first_name: string
     last_name: string
     role: string
+    enrollment_token?: string
   }) => {
     const { data } = await authApi.register(formData)
     login(data.user, data.tokens.access, data.tokens.refresh)
-    navigate('/')
+    // Redirect to enrolled course if token-based, otherwise to home
+    if (data.enrolled_course_slug) {
+      navigate(`/courses/${data.enrolled_course_slug}`)
+    } else {
+      navigate('/')
+    }
   }
 
   const handleLogout = async () => {

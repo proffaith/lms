@@ -9,6 +9,7 @@ router.register('courses', views.CourseViewSet, basename='course')
 urlpatterns = [
     # Import must come before router to avoid slug match
     path('courses/import/', views.CourseImportView.as_view(), name='course-import'),
+    path('enrollment-token/validate/', views.EnrollmentTokenValidateView.as_view(), name='enrollment-token-validate'),
     path('', include(router.urls)),
     path('enrollments/', views.EnrollmentListView.as_view(), name='enrollment-list'),
     # Modules under a course

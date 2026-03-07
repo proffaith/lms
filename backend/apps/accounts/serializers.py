@@ -8,12 +8,13 @@ User = get_user_model()
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True)
+    enrollment_token = serializers.UUIDField(required=False, write_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'password', 'password_confirm', 'role',
+            'password', 'password_confirm', 'role', 'enrollment_token',
         ]
 
     def validate(self, attrs):
@@ -21,6 +22,22 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'password_confirm': 'Passwords do not match.'}
             )
+        # Validate enrollment token if provided
+        enrollment_token = attrs.pop('enrollment_token', None)
+        if enrollment_token:
+            from apps.courses.models import Course
+            try:
+                course = Course.objects.get(
+                    enrollment_token=enrollment_token,
+                    status=Course.Status.PUBLISHED,
+                )
+                self.context['enrollment_course'] = course
+            except Course.DoesNotExist:
+                raise serializers.ValidationError(
+                    {'enrollment_token': 'Invalid or expired enrollment token.'}
+                )
+            # Force role to student when registering via token
+            attrs['role'] = 'student'
         return attrs
 
     def create(self, validated_data):

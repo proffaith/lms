@@ -69,6 +69,7 @@ export interface CourseDetail extends Omit<Course, 'instructor_name'> {
   instructor: UserMinimal
   modules: Module[]
   is_enrolled: boolean
+  enrollment_token: string | null
   updated_at: string
 }
 

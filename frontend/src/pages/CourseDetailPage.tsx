@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   BookOpen,
+  Check,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
   ClipboardList,
+  Copy,
   FileQuestion,
   Compass,
+  LinkIcon,
+  RefreshCw,
   Target,
   Users,
+  X,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import toast from 'react-hot-toast'
@@ -26,6 +31,7 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true)
   const [enrolling, setEnrolling] = useState(false)
   const [expandedModules, setExpandedModules] = useState<Set<number>>(new Set())
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!slug) return
@@ -84,6 +90,36 @@ export default function CourseDetailPage() {
 
   const isLessonCompleted = (lessonId: number) => {
     return progress?.lessons.some((l) => l.lesson_id === lessonId && l.completed) ?? false
+  }
+
+  const handleGenerateToken = async () => {
+    if (!slug) return
+    try {
+      const res = await api.post<{ enrollment_token: string }>(`/courses/${slug}/generate-token/`)
+      setCourse((prev) => prev ? { ...prev, enrollment_token: res.data.enrollment_token } : prev)
+      toast.success('Registration link generated!')
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to generate link.')
+    }
+  }
+
+  const handleDeleteToken = async () => {
+    if (!slug) return
+    try {
+      await api.delete(`/courses/${slug}/delete-token/`)
+      setCourse((prev) => prev ? { ...prev, enrollment_token: null } : prev)
+      toast.success('Registration link disabled.')
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to disable link.')
+    }
+  }
+
+  const handleCopyLink = () => {
+    if (!course?.enrollment_token) return
+    const url = `${window.location.origin}/register?token=${course.enrollment_token}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   if (loading) return <p className="text-gray-500">Loading course...</p>
@@ -172,6 +208,66 @@ export default function CourseDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Registration Link — instructor/admin only */}
+      {canEdit && (
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <LinkIcon className="w-5 h-5 text-blue-600" />
+            Registration Link
+          </h2>
+          {course.enrollment_token ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={`${window.location.origin}/register?token=${course.enrollment_token}`}
+                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm font-mono text-gray-700"
+                />
+                <button
+                  onClick={handleCopyLink}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Share this link with students. They will be automatically enrolled upon registration.
+              </p>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleGenerateToken}
+                  className="inline-flex items-center gap-1 text-sm text-amber-600 hover:text-amber-700"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Regenerate
+                </button>
+                <button
+                  onClick={handleDeleteToken}
+                  className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Disable
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-500 mb-3">
+                Generate a registration link that auto-enrolls students in this course when they sign up.
+              </p>
+              <button
+                onClick={handleGenerateToken}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+              >
+                <LinkIcon className="w-4 h-4" />
+                Generate Registration Link
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Learning Objectives */}
       {objectives.length > 0 && (

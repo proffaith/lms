@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -30,6 +32,12 @@ class Course(models.Model):
         max_length=20,
         choices=Status.choices,
         default=Status.DRAFT,
+    )
+    enrollment_token = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        help_text='Token for registration-link auto-enrollment',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

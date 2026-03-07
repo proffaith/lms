@@ -76,7 +76,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description', 'thumbnail',
             'instructor', 'status', 'program', 'modules',
-            'is_enrolled', 'enrollment_count',
+            'is_enrolled', 'enrollment_count', 'enrollment_token',
             'created_at', 'updated_at',
         ]
 
