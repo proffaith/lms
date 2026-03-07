@@ -22,3 +22,4 @@ uritemplate==4.2.0
 gunicorn==23.0.0
 whitenoise==6.9.0
 boto3==1.38.0
+PySocks==1.7.1

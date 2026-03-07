@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .base import *  # noqa: F401, F403
 
@@ -9,6 +10,23 @@ try:
 except ImportError:
     import pymysql
     pymysql.install_as_MySQLdb()
+
+# QuotaGuard SOCKS proxy — route all outbound connections through static IPs
+# so Azure MySQL firewall can whitelist them
+QUOTAGUARD_URL = os.environ.get('QUOTAGUARDSTATIC_URL')
+if QUOTAGUARD_URL:
+    import socks
+    import socket
+    parsed = urlparse(QUOTAGUARD_URL)
+    socks.set_default_proxy(
+        socks.SOCKS5,
+        parsed.hostname,
+        parsed.port,
+        True,  # rdns: let proxy resolve DNS
+        parsed.username,
+        parsed.password,
+    )
+    socket.socket = socks.socksocket
 
 DEBUG = False
 
