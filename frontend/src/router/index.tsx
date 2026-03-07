@@ -21,6 +21,7 @@ import AdminUsersPage from '@/pages/admin/AdminUsersPage'
 import AdminCoursesPage from '@/pages/admin/AdminCoursesPage'
 import ImportCoursePage from '@/pages/admin/ImportCoursePage'
 import FeedPage from '@/pages/FeedPage'
+import JourneyItemPage from '@/pages/JourneyItemPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
 
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'courses/:slug', element: <CourseDetailPage /> },
       { path: 'courses/:slug/learn/:lessonId', element: <LessonPage /> },
       { path: 'courses/:slug/feed', element: <FeedPage /> },
+      { path: 'courses/:slug/journey/:itemId', element: <JourneyItemPage /> },
       { path: 'quizzes/:quizId', element: <QuizPage /> },
       { path: 'assignments/:assignmentId', element: <AssignmentPage /> },
       { path: 'progress', element: <ProgressPage /> },

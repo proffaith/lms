@@ -379,6 +379,10 @@ class Command(BaseCommand):
                 summary=item_data.get('summary', ''),
                 body_html=item_data.get('body_html', ''),
                 source_url=item_data.get('source_url', ''),
+                source_metadata=(
+                    {'citation': item_data['citation']}
+                    if item_data.get('citation') else {}
+                ),
                 course_objective=course_objective,
             )
             count += 1

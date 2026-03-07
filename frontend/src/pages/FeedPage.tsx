@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Rss, Loader2, Bookmark } from 'lucide-react'
+import { ArrowLeft, Plus, Compass, Loader2, Bookmark } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { feedApi } from '@/features/feed/services/feedApi'
 import FeedItemCard from '@/features/feed/components/FeedItemCard'
 import FeedCreatePost from '@/features/feed/components/FeedCreatePost'
-import FeedResponseForm from '@/features/feed/components/FeedResponseForm'
 import type { FeedItem, EngagementProfile } from '@/types'
 
 export default function FeedPage() {
@@ -92,11 +91,11 @@ export default function FeedPage() {
           </Link>
           <div>
             <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Rss className="w-5 h-5 text-blue-500" />
-              Course Feed
+              <Compass className="w-5 h-5 text-blue-500" />
+              Journey
             </h1>
             <p className="text-sm text-gray-500">
-              {totalCount} {totalCount === 1 ? 'item' : 'items'} in the stream
+              {totalCount} {totalCount === 1 ? 'item' : 'items'} in the journey
             </p>
           </div>
         </div>
@@ -153,8 +152,8 @@ export default function FeedPage() {
       {/* Feed items */}
       {items.length === 0 ? (
         <div className="text-center py-16">
-          <Rss className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-700 mb-1">The feed is empty</h3>
+          <Compass className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <h3 className="text-lg font-medium text-gray-700 mb-1">The journey is empty</h3>
           <p className="text-sm text-gray-500">
             Be the first to share something with the class!
           </p>
@@ -162,7 +161,7 @@ export default function FeedPage() {
       ) : (
         <>
           {items.map((item) => (
-            <FeedItemCard key={item.id} item={item} onUpdate={handleFeedUpdate} />
+            <FeedItemCard key={item.id} item={item} courseSlug={slug} onUpdate={handleFeedUpdate} />
           ))}
 
           {/* Load more */}

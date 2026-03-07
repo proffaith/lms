@@ -17,6 +17,7 @@ export default function FeedCreatePost({ courseSlug, onCreated, onCancel }: Prop
   const [title, setTitle] = useState('')
   const [summary, setSummary] = useState('')
   const [sourceUrl, setSourceUrl] = useState('')
+  const [citationText, setCitationText] = useState('')
   const [itemType, setItemType] = useState<FeedItemType>(
     isInstructor ? 'instructor' : 'student',
   )
@@ -34,6 +35,9 @@ export default function FeedCreatePost({ courseSlug, onCreated, onCancel }: Prop
         summary: summary.trim(),
         body_html: summary.trim() ? `<p>${summary.trim()}</p>` : '',
         source_url: sourceUrl.trim() || undefined,
+        source_metadata: citationText.trim()
+          ? { citation: citationText.trim() }
+          : undefined,
       })
       onCreated()
     } catch {
@@ -91,13 +95,24 @@ export default function FeedCreatePost({ courseSlug, onCreated, onCancel }: Prop
           />
         </div>
 
-        <div className="mb-3">
+        {/* Source & Citation section */}
+        <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-xs font-medium text-blue-700 mb-2">
+            Sources build credibility. Include a link and citation if available.
+          </p>
           <input
             type="url"
             value={sourceUrl}
             onChange={(e) => setSourceUrl(e.target.value)}
-            placeholder="Link to article or resource (optional)"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            placeholder="Link to article, opinion, or resource"
+            className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          />
+          <input
+            type="text"
+            value={citationText}
+            onChange={(e) => setCitationText(e.target.value)}
+            placeholder="Citation, e.g., Marbury v. Madison, 5 U.S. 137 (1803)"
+            className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
           />
         </div>
 

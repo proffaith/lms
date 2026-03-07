@@ -25,6 +25,7 @@ export const feedApi = {
       summary?: string
       body_html?: string
       source_url?: string
+      source_metadata?: Record<string, unknown>
       course_objective?: number | null
       related_item?: number | null
     },

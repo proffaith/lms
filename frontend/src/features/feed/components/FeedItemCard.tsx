@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import {
   ExternalLink,
   Globe,
@@ -17,6 +18,7 @@ import type { FeedItem } from '@/types'
 
 interface Props {
   item: FeedItem
+  courseSlug?: string
   onUpdate?: () => void
 }
 
@@ -61,7 +63,7 @@ const TYPE_CONFIG = {
   },
 }
 
-export default function FeedItemCard({ item, onUpdate }: Props) {
+export default function FeedItemCard({ item, courseSlug, onUpdate }: Props) {
   const user = useAuthStore((s) => s.user)
   const isInstructor = user?.role === 'instructor' || user?.role === 'admin'
 
@@ -71,6 +73,7 @@ export default function FeedItemCard({ item, onUpdate }: Props) {
   }
 
   const config = TYPE_CONFIG[item.item_type] || TYPE_CONFIG.student
+  const detailPath = courseSlug ? `/courses/${courseSlug}/journey/${item.id}` : undefined
 
   const handlePin = async () => {
     await feedApi.togglePin(item.id)
@@ -168,12 +171,35 @@ export default function FeedItemCard({ item, onUpdate }: Props) {
           </div>
         </div>
 
-        {/* Title */}
-        <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
+        {/* Title — clickable link to detail page */}
+        {detailPath ? (
+          <Link
+            to={detailPath}
+            className="font-semibold text-gray-900 mb-1 hover:text-blue-600 transition-colors block"
+          >
+            {item.title}
+          </Link>
+        ) : (
+          <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
+        )}
 
-        {/* Summary */}
+        {/* Summary — truncated with "Read more" link */}
         {item.summary && (
-          <p className="text-sm text-gray-600 mb-2">{item.summary}</p>
+          <p className="text-sm text-gray-600 mb-2">
+            {item.summary.length > 150 && detailPath ? (
+              <>
+                {item.summary.slice(0, 150).trimEnd()}&hellip;{' '}
+                <Link
+                  to={detailPath}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Read more
+                </Link>
+              </>
+            ) : (
+              item.summary
+            )}
+          </p>
         )}
 
         {/* Course objective badge */}
