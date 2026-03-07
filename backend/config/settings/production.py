@@ -9,6 +9,8 @@ from .base import *  # noqa: F401, F403
 # so the QuotaGuard proxy wouldn't apply to DB connections.
 import pymysql
 pymysql.install_as_MySQLdb()
+# Django 6.0 requires mysqlclient>=2.2.1; spoof the version check
+pymysql.version_info = (2, 2, 8, 'final', 0)
 
 # QuotaGuard proxy — route all outbound connections through static IPs
 # so Azure MySQL firewall can whitelist them
