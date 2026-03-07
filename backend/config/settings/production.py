@@ -4,12 +4,11 @@ from urllib.parse import urlparse
 
 from .base import *  # noqa: F401, F403
 
-# Use PyMySQL if mysqlclient (C extension) isn't available (e.g. on Heroku)
-try:
-    import MySQLdb  # noqa: F401
-except ImportError:
-    import pymysql
-    pymysql.install_as_MySQLdb()
+# Force PyMySQL (pure Python) instead of mysqlclient (C extension).
+# mysqlclient's C-level sockets bypass PySocks monkey-patching,
+# so the QuotaGuard proxy wouldn't apply to DB connections.
+import pymysql
+pymysql.install_as_MySQLdb()
 
 # QuotaGuard proxy — route all outbound connections through static IPs
 # so Azure MySQL firewall can whitelist them
