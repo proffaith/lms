@@ -8,10 +8,11 @@ Usage:
 import json
 import logging
 import os
+import re
 
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils.text import slugify
 
 logger = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ class Command(BaseCommand):
                 order=mod_data.get('order', 0),
             )
 
-            # Create lessons
+            # Create lessons and non-text content first
             first_lesson = None
             for lesson_data in mod_data.get('lessons', []):
                 lesson = Lesson.objects.create(
@@ -137,12 +138,10 @@ class Command(BaseCommand):
                 if first_lesson is None:
                     first_lesson = lesson
 
-                # Create lesson contents
                 for content_data in lesson_data.get('contents', []):
                     content_type = content_data.get('content_type', 'text')
 
                     if content_type == 'file' and content_data.get('s3_key'):
-                        # Download file from S3 and save to Django FileField
                         lc = LessonContent(
                             lesson=lesson,
                             content_type='file',
@@ -170,7 +169,7 @@ class Command(BaseCommand):
                                 )
                             )
                         lc.save()
-                    else:
+                    elif content_type != 'text':
                         LessonContent.objects.create(
                             lesson=lesson,
                             content_type=content_type,
@@ -179,7 +178,6 @@ class Command(BaseCommand):
                             order=content_data.get('order', 0),
                         )
 
-            # If no lessons were created, make a placeholder for quizzes/assignments
             if first_lesson is None:
                 first_lesson = Lesson.objects.create(
                     module=module,
@@ -188,18 +186,51 @@ class Command(BaseCommand):
                     order=0,
                 )
 
-            # Create quizzes
+            # Create quizzes BEFORE text content (need IDs for link resolution)
+            quiz_map = {}
             for quiz_data in mod_data.get('quizzes', []):
-                self._create_quiz(quiz_data, first_lesson, objective_map)
+                quiz = self._create_quiz(quiz_data, first_lesson, objective_map)
+                quiz_map[quiz_data['title']] = quiz.id
 
-            # Create assignments
+            # Create assignments BEFORE text content
+            assignment_map = {}
             for asgn_data in mod_data.get('assignments', []):
-                self._create_assignment(asgn_data, first_lesson, objective_map)
+                asgn = self._create_assignment(asgn_data, first_lesson, objective_map)
+                assignment_map[asgn_data['title']] = asgn.id
+
+            # Now create text content with checklist link resolution
+            checklist_items = mod_data.get('checklist', [])
+            for lesson_data in mod_data.get('lessons', []):
+                lesson_obj = Lesson.objects.get(
+                    module=module,
+                    title=lesson_data['title'],
+                    order=lesson_data.get('order', 0),
+                )
+                for content_data in lesson_data.get('contents', []):
+                    content_type = content_data.get('content_type', 'text')
+                    if content_type != 'text':
+                        continue
+
+                    text = content_data.get('text_content', '')
+
+                    if checklist_items and '[INSERT LINK:' in text:
+                        text = self._resolve_checklist_links(
+                            text, checklist_items,
+                            quiz_map, assignment_map, lesson_obj,
+                        )
+
+                    LessonContent.objects.create(
+                        lesson=lesson_obj,
+                        content_type='text',
+                        title=content_data.get('title', ''),
+                        text_content=text,
+                        order=content_data.get('order', 0),
+                    )
 
         self.stdout.write(f'  Created {len(modules_data)} modules')
 
     def _create_quiz(self, quiz_data, lesson, objective_map):
-        """Create a Quiz with Questions and AnswerChoices."""
+        """Create a Quiz with Questions and AnswerChoices. Returns the Quiz."""
         quiz = Quiz.objects.create(
             lesson=lesson,
             title=quiz_data['title'],
@@ -208,7 +239,6 @@ class Command(BaseCommand):
         )
 
         for q_data in quiz_data.get('questions', []):
-            # Resolve objective
             course_objective = None
             obj_code = q_data.get('objective_code')
             if obj_code and obj_code in objective_map:
@@ -230,6 +260,8 @@ class Command(BaseCommand):
                     is_correct=choice_data.get('is_correct', False),
                     order=choice_data.get('order', 0),
                 )
+
+        return quiz
 
     def _download_s3_file(self, s3_key: str, s3_bucket: str = '') -> bytes | None:
         """Download a file from S3. Returns bytes or None on failure."""
@@ -262,16 +294,64 @@ class Command(BaseCommand):
             return None
 
     def _create_assignment(self, asgn_data, lesson, objective_map):
-        """Create an Assignment record."""
+        """Create an Assignment record. Returns the Assignment."""
         course_objective = None
         obj_code = asgn_data.get('objective_code')
         if obj_code and obj_code in objective_map:
             course_objective = objective_map[obj_code]
 
-        Assignment.objects.create(
+        return Assignment.objects.create(
             lesson=lesson,
             title=asgn_data['title'],
             description=asgn_data.get('description', ''),
             max_score=asgn_data.get('max_score', 100),
             course_objective=course_objective,
         )
+
+    def _resolve_checklist_links(self, html, checklist_items, quiz_map, assignment_map, lesson):
+        """Replace [INSERT LINK: X] placeholders with actual <a> tags."""
+        link_map = {}
+
+        for item in checklist_items:
+            placeholder = item.get('link_placeholder') or item.get('label', '')
+            task_type = item.get('task_type', '')
+
+            if item.get('url'):
+                link_map[placeholder] = item['url']
+            elif task_type == 'quiz' and item.get('ref_title'):
+                quiz_id = quiz_map.get(item['ref_title'])
+                if quiz_id:
+                    link_map[placeholder] = f'/quizzes/{quiz_id}'
+            elif task_type in ('assignment', 'discussion') and item.get('ref_title'):
+                asgn_id = assignment_map.get(item['ref_title'])
+                if asgn_id:
+                    link_map[placeholder] = f'/assignments/{asgn_id}'
+            elif item.get('s3_key') or item.get('filename'):
+                filename = item.get('filename', '')
+                title = item.get('label', filename)
+                matching = LessonContent.objects.filter(
+                    lesson=lesson,
+                    content_type='file',
+                ).filter(
+                    models.Q(title__icontains=filename) |
+                    models.Q(title__icontains=title)
+                ).first()
+                if matching and matching.file:
+                    link_map[placeholder] = matching.file.url
+
+        if not link_map:
+            return html
+
+        def replace_placeholder(match):
+            label = match.group(1).strip()
+            url = link_map.get(label)
+            if url:
+                target = ' target="_blank" rel="noopener noreferrer"' if url.startswith('http') else ''
+                return (
+                    f'<a href="{url}"{target} '
+                    f'style="color: #2563eb; text-decoration: underline; font-weight: 500;">'
+                    f'{label}</a>'
+                )
+            return match.group(0)
+
+        return re.sub(r'🔗\s*\[INSERT LINK:\s*(.+?)\]', replace_placeholder, html)

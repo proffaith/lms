@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 from django.core.files.base import ContentFile
 from django.db import models, transaction
@@ -382,6 +383,7 @@ class CourseImportView(APIView):
                 order=mod_data.get('order', 0),
             )
 
+            # Create a placeholder lesson first (needed for quizzes/assignments)
             first_lesson = None
             for lesson_data in mod_data.get('lessons', []):
                 lesson = Lesson.objects.create(
@@ -393,11 +395,13 @@ class CourseImportView(APIView):
                 if first_lesson is None:
                     first_lesson = lesson
 
+                # Create non-text content immediately (files, videos)
+                # Text content with [INSERT LINK:] placeholders is deferred
+                # until after quizzes/assignments are created
                 for content_data in lesson_data.get('contents', []):
                     content_type = content_data.get('content_type', 'text')
 
                     if content_type == 'file' and content_data.get('s3_key'):
-                        # Download file from S3 and save to Django FileField
                         lc = LessonContent(
                             lesson=lesson,
                             content_type='file',
@@ -412,7 +416,6 @@ class CourseImportView(APIView):
                             filename = content_data.get('filename', 'file.pdf')
                             lc.file.save(filename, ContentFile(file_bytes), save=False)
                         else:
-                            # S3 download failed — fall back to text with info
                             lc.content_type = 'text'
                             lc.text_content = (
                                 f'<p><em>File not available: '
@@ -420,7 +423,7 @@ class CourseImportView(APIView):
                                 f'</em></p>'
                             )
                         lc.save()
-                    else:
+                    elif content_type != 'text':
                         LessonContent.objects.create(
                             lesson=lesson,
                             content_type=content_type,
@@ -436,7 +439,8 @@ class CourseImportView(APIView):
                     order=0,
                 )
 
-            # Quizzes
+            # Create quizzes BEFORE text content (need IDs for link resolution)
+            quiz_map = {}  # title -> quiz_id
             for quiz_data in mod_data.get('quizzes', []):
                 quiz = Quiz.objects.create(
                     lesson=first_lesson,
@@ -444,6 +448,7 @@ class CourseImportView(APIView):
                     passing_score=quiz_data.get('passing_score', 70),
                     max_attempts=quiz_data.get('max_attempts', 0),
                 )
+                quiz_map[quiz_data['title']] = quiz.id
                 for q_data in quiz_data.get('questions', []):
                     obj_code = q_data.get('objective_code')
                     question = Question.objects.create(
@@ -462,13 +467,104 @@ class CourseImportView(APIView):
                             order=choice.get('order', 0),
                         )
 
-            # Assignments
+            # Create assignments BEFORE text content (need IDs for link resolution)
+            assignment_map = {}  # title -> assignment_id
             for asgn_data in mod_data.get('assignments', []):
                 obj_code = asgn_data.get('objective_code')
-                Assignment.objects.create(
+                asgn = Assignment.objects.create(
                     lesson=first_lesson,
                     title=asgn_data['title'],
                     description=asgn_data.get('description', ''),
                     max_score=asgn_data.get('max_score', 100),
                     course_objective=objective_map.get(obj_code),
                 )
+                assignment_map[asgn_data['title']] = asgn.id
+
+            # Now create text content, resolving [INSERT LINK:] placeholders
+            # if a checklist array is present
+            checklist_items = mod_data.get('checklist', [])
+            for lesson_data in mod_data.get('lessons', []):
+                lesson_obj = Lesson.objects.get(
+                    module=module,
+                    title=lesson_data['title'],
+                    order=lesson_data.get('order', 0),
+                )
+                for content_data in lesson_data.get('contents', []):
+                    content_type = content_data.get('content_type', 'text')
+                    if content_type != 'text':
+                        continue  # already created above
+
+                    text = content_data.get('text_content', '')
+
+                    # Resolve checklist links if checklist is present
+                    if checklist_items and '[INSERT LINK:' in text:
+                        text = self._resolve_checklist_links(
+                            text, checklist_items,
+                            quiz_map, assignment_map, lesson_obj,
+                        )
+
+                    LessonContent.objects.create(
+                        lesson=lesson_obj,
+                        content_type='text',
+                        title=content_data.get('title', ''),
+                        text_content=text,
+                        order=content_data.get('order', 0),
+                    )
+
+    def _resolve_checklist_links(self, html, checklist_items, quiz_map, assignment_map, lesson):
+        """Replace [INSERT LINK: X] placeholders with actual <a> tags.
+
+        Uses the checklist array from the export to map placeholder labels
+        to URLs for quizzes, assignments, files, or external links.
+        """
+        link_map = {}  # placeholder_label -> url
+
+        for item in checklist_items:
+            placeholder = item.get('link_placeholder') or item.get('label', '')
+            task_type = item.get('task_type', '')
+
+            # External URL takes priority
+            if item.get('url'):
+                link_map[placeholder] = item['url']
+            # Quiz reference
+            elif task_type == 'quiz' and item.get('ref_title'):
+                quiz_id = quiz_map.get(item['ref_title'])
+                if quiz_id:
+                    link_map[placeholder] = f'/quizzes/{quiz_id}'
+            # Assignment or discussion reference
+            elif task_type in ('assignment', 'discussion') and item.get('ref_title'):
+                asgn_id = assignment_map.get(item['ref_title'])
+                if asgn_id:
+                    link_map[placeholder] = f'/assignments/{asgn_id}'
+            # File content — link to the file within the lesson
+            elif item.get('s3_key') or item.get('filename'):
+                # Find the matching LessonContent file by title/filename
+                filename = item.get('filename', '')
+                title = item.get('label', filename)
+                matching = LessonContent.objects.filter(
+                    lesson=lesson,
+                    content_type='file',
+                ).filter(
+                    models.Q(title__icontains=filename) |
+                    models.Q(title__icontains=title)
+                ).first()
+                if matching and matching.file:
+                    link_map[placeholder] = matching.file.url
+
+        if not link_map:
+            return html
+
+        def replace_placeholder(match):
+            label = match.group(1).strip()
+            url = link_map.get(label)
+            if url:
+                # External URLs open in new tab
+                target = ' target="_blank" rel="noopener noreferrer"' if url.startswith('http') else ''
+                return (
+                    f'<a href="{url}"{target} '
+                    f'style="color: #2563eb; text-decoration: underline; font-weight: 500;">'
+                    f'{label}</a>'
+                )
+            return match.group(0)  # leave as-is if no match
+
+        return re.sub(r'🔗\s*\[INSERT LINK:\s*(.+?)\]', replace_placeholder, html)
